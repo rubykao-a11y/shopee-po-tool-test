@@ -1,0 +1,1313 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>蝦皮採購單自動篩選與補貨自動回填工具</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --primary: #ee4d2d;
+            --primary-hover: #d73211;
+            --bg: #f6f6f6;
+            --card-bg: #ffffff;
+            --text: #333333;
+            --border: #e0e0e0;
+            --accent-twg: #1890ff;
+            --accent-twx: #52c41a;
+            --accent-twa: #fa8c16;
+            --success: #2e7d32;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            padding: 16px;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 98%;
+            width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: var(--card-bg);
+            padding: 18px 24px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            font-size: 22px;
+            color: var(--primary);
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        p.subtitle {
+            color: #666;
+            font-size: 13px;
+        }
+
+        .grid-layout-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        @media (max-width: 1024px) {
+            .grid-layout-3 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 18px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 290px;
+        }
+
+        .card-content {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+        }
+
+        .card-title {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .badge {
+            background: #e6f7ff;
+            color: #1890ff;
+            border: 1px solid #91d5ff;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+
+        textarea, input[type="text"] {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 13px;
+            font-family: monospace;
+            background: #fafafa;
+        }
+
+        textarea {
+            height: 155px;
+            resize: vertical;
+            flex-grow: 1;
+        }
+
+        textarea:focus, input[type="text"]:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: #fff;
+        }
+
+        .file-upload-box {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 16px 14px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.3s, background 0.3s;
+            background: #fafafa;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 155px;
+        }
+
+        .file-upload-box:hover {
+            border-color: var(--primary);
+            background: #fff5f2;
+        }
+
+        .file-upload-box input {
+            display: none;
+        }
+
+        .btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 11px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: background 0.2s;
+            margin-top: 10px;
+        }
+
+        .btn:hover {
+            background: var(--primary-hover);
+        }
+
+        .btn-green {
+            background: #2e7d32;
+        }
+
+        .btn-green:hover {
+            background: #1b5e20;
+        }
+
+        .btn-copy {
+            background: #f0f0f0;
+            color: #333;
+            border: 1px solid #ccc;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-copy:hover {
+            background: #e0e0e0;
+        }
+
+        .result-section {
+            background: var(--card-bg);
+            padding: 20px 24px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            display: none;
+        }
+
+        .warehouse-group {
+            margin-bottom: 20px;
+            border-left: 4px solid var(--border);
+            padding-left: 16px;
+        }
+
+        .group-twg { border-color: var(--accent-twg); }
+        .group-twx { border-color: var(--accent-twx); }
+        .group-twa { border-color: var(--accent-twa); }
+
+        .warehouse-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .warehouse-name {
+            font-size: 17px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .po-list {
+            background: #f8f9fa;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-family: monospace;
+            font-size: 14px;
+            line-height: 1.8;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .details-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 13px;
+        }
+
+        .details-table th, .details-table td {
+            border: 1px solid var(--border);
+            padding: 8px 12px;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        .details-table th {
+            background: #f4f5f7;
+            font-weight: 600;
+            color: #444;
+            vertical-align: top;
+        }
+
+        .details-table td.name-col {
+            white-space: normal;
+            word-break: break-word;
+            min-width: 250px;
+        }
+
+        .details-table tr:nth-child(even) {
+            background: #fafafa;
+        }
+
+        .text-center {
+            text-align: center !important;
+        }
+
+        .header-filter-container {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .table-filter-select {
+            width: 100%;
+            min-width: 85px;
+            padding: 3px 4px;
+            font-size: 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #fff;
+            color: #333;
+            cursor: pointer;
+        }
+
+        .wh-col {
+            min-width: 95px;
+        }
+
+        .qty-input-box {
+            width: 85px;
+            padding: 4px 8px;
+            border: 1px solid #1890ff;
+            border-radius: 4px;
+            font-weight: bold;
+            color: #1890ff;
+            text-align: right;
+        }
+
+        .summary-box {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .summary-item {
+            flex: 1;
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .summary-val {
+            font-size: 22px;
+            font-weight: bold;
+            color: var(--primary);
+        }
+
+        .summary-lbl {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .section-header-action {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .alert-toast {
+            padding: 10px 14px;
+            background: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #a5d6a7;
+            border-radius: 6px;
+            font-size: 13px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .gsheet-box {
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>📦 蝦皮採購單自動篩選與補貨回填</h1>
+        <p class="subtitle">自動比對 MT-SKU 清單、分倉抓取 PR 單號，連動 Google Sheets 自動回填補貨量，且匯出 Excel 100% 強制為「文字格式 (@)」！</p>
+    </header>
+
+    <div class="grid-layout-3">
+        <!-- Step 1: MT-SKU 清單設定 -->
+        <div class="card">
+            <div class="card-title">
+                <span>1. 我的 MT-SKU 商品清單</span>
+                <span class="badge" id="skuCountBadge">載入中...</span>
+            </div>
+            <textarea id="skuInput" placeholder="請貼入您的 MT-SKU，每行或以逗號隔開一個..."></textarea>
+            <p style="font-size: 12px; color: #666; margin-top: 6px;">💾 系統具備記憶功能，輸入或貼上後自動儲存於本機瀏覽器。</p>
+        </div>
+
+        <!-- Step 2: 上傳每週採購單 -->
+        <div class="card">
+            <div class="card-content">
+                <div class="card-title">
+                    <span>2. 上傳本週採購單 Excel</span>
+                </div>
+                <div class="file-upload-box" onclick="document.getElementById('fileInput').click()">
+                    <div style="font-size: 28px; margin-bottom: 2px;">📄</div>
+                    <div style="font-weight: 600; font-size: 13px; margin-bottom: 2px;" id="fileNameDisplay">點擊上傳採購單 Excel</div>
+                    <div style="font-size: 11px; color: #888;">(.xlsx / .xls)</div>
+                    <input type="file" id="fileInput" accept=".xlsx, .xls" onchange="handleFileSelect(event)">
+                </div>
+            </div>
+            <button class="btn" onclick="processPO()">比對與抓取採購單</button>
+        </div>
+
+        <!-- Step 3: 一鍵連動 Google Sheets 補貨總表 -->
+        <div class="card">
+            <div class="card-content">
+                <div class="card-title">
+                    <span>3. Google Sheets 補貨總表網址</span>
+                    <span class="badge" style="background:#f6ffed; color:#52c41a; border-color:#b7eb8f;">自動連動回填 I 欄</span>
+                </div>
+                <div class="gsheet-box">
+                    <input type="text" id="gsheetUrlInput" 
+                        value="https://docs.google.com/spreadsheets/d/1BYns8Hpz3sNp-7uyHE4qSFRiELWAjoCOyjonqnJrzOE/edit?gid=1040995428#gid=1040995428&range=A:L" 
+                        placeholder="請貼入 Google Sheets 網址...">
+                </div>
+                <div style="margin-top: 6px; margin-bottom: 8px;">
+                    <label style="font-size: 12px; font-weight: 600; color: #333; display: flex; align-items: center; gap: 8px;">
+                        <span>📅 D 欄 預計進貨日期：</span>
+                        <input type="date" id="expectedInboundDateInput" style="padding: 4px 8px; border: 1px solid #1890ff; border-radius: 6px; font-size: 13px; color: #1890ff; font-weight: bold; cursor: pointer;">
+                    </label>
+                </div>
+                <div style="margin-top: 4px; border-top: 1px dashed #eee; padding-top: 6px; margin-bottom: 8px;">
+                    <label style="font-size: 12px; color: #666; cursor: pointer; display: flex; align-items: center; gap: 6px;" onclick="document.getElementById('replenishFileInput').click()">
+                        <span>📂 上傳補貨 Excel/CSV 檔案 (.xlsx / .csv)</span>
+                        <input type="file" id="replenishFileInput" accept=".xlsx, .xls, .csv" onchange="handleReplenishFileSelect(event)" style="display:none;">
+                    </label>
+                </div>
+            </div>
+            <button class="btn btn-green" onclick="readReplenishFromGSheet()">讀取並自動回填補貨量</button>
+        </div>
+    </div>
+
+    <!-- 提示訊息 -->
+    <div class="alert-toast" id="alertToast"></div>
+
+    <!-- 結果展示區 -->
+    <div class="result-section" id="resultSection">
+        <div class="section-header-action">
+            <h2 style="font-size: 18px;">📊 本週採購單比對結果</h2>
+            <button class="btn btn-green" style="width: auto; margin-top: 0; padding: 10px 20px; font-size: 14px;" onclick="exportFilteredExcel()">
+                📥 匯出商品採購單回填數量
+            </button>
+        </div>
+        
+        <div class="summary-box">
+            <div class="summary-item">
+                <div class="summary-val" id="totalMatchingPR">0</div>
+                <div class="summary-lbl">符合之採購單號 (PR ID)</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-val" id="totalMatchingItems">0</div>
+                <div class="summary-lbl">包含商品品項數</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-val" id="totalMatchingQty">0</div>
+                <div class="summary-lbl">總預計採購數量 (Pcs)</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-val" id="totalConfirmedQty" style="color: var(--success);">0</div>
+                <div class="summary-lbl">總廠商確認補貨量 (unit)</div>
+            </div>
+        </div>
+
+        <!-- 高鐵南倉 (TWG) -->
+        <div class="warehouse-group group-twg" id="groupTWG" style="display: none;">
+            <div class="warehouse-header">
+                <div class="warehouse-name" style="color: var(--accent-twg);">
+                    🏢 高鐵南路倉 (TWG)
+                </div>
+                <button class="btn-copy" onclick="copyText('listTWG')">複製單號</button>
+            </div>
+            <div class="po-list" id="listTWG"></div>
+        </div>
+
+        <!-- 安南三倉 (TWX) -->
+        <div class="warehouse-group group-twx" id="groupTWX" style="display: none;">
+            <div class="warehouse-header">
+                <div class="warehouse-name" style="color: var(--accent-twx);">
+                    🏢 安南三倉 (TWX)
+                </div>
+                <button class="btn-copy" onclick="copyText('listTWX')">複製單號</button>
+            </div>
+            <div class="po-list" id="listTWX"></div>
+        </div>
+
+        <!-- 觀音倉 (TWA) -->
+        <div class="warehouse-group group-twa" id="groupTWA" style="display: none;">
+            <div class="warehouse-header">
+                <div class="warehouse-name" style="color: var(--accent-twa);">
+                    🏢 觀音倉 (TWA)
+                </div>
+                <button class="btn-copy" onclick="copyText('listTWA')">複製單號</button>
+            </div>
+            <div class="po-list" id="listTWA"></div>
+        </div>
+
+        <!-- 其他倉別 (如果有) -->
+        <div class="warehouse-group" id="groupOTHER" style="display: none;">
+            <div class="warehouse-header">
+                <div class="warehouse-name">
+                    🏢 其他倉別
+                </div>
+                <button class="btn-copy" onclick="copyText('listOTHER')">複製單號</button>
+            </div>
+            <div class="po-list" id="listOTHER"></div>
+        </div>
+
+        <!-- 採購商品明細列表 -->
+        <div style="margin-top: 20px;">
+            <h3 style="font-size: 15px; margin-bottom: 10px;">📋 比對成功商品明細</h3>
+            <div style="overflow-x: auto;">
+                <table class="details-table" id="detailsTable">
+                    <thead>
+                        <tr>
+                            <th class="wh-col">
+                                <div class="header-filter-container">
+                                    <span>倉別</span>
+                                    <select class="table-filter-select" id="filterWh" onchange="applyTableFilters()">
+                                        <option value="">(全部倉別)</option>
+                                    </select>
+                                </div>
+                            </th>
+                            <th>
+                                <div class="header-filter-container">
+                                    <span>採購單號 (PR ID)</span>
+                                    <select class="table-filter-select" id="filterPR" onchange="applyTableFilters()">
+                                        <option value="">(全部單號)</option>
+                                    </select>
+                                </div>
+                            </th>
+                            <th>
+                                <div class="header-filter-container">
+                                    <span>廠商料號 (Supplier SKU ID)</span>
+                                    <select class="table-filter-select" id="filterVendor" onchange="applyTableFilters()">
+                                        <option value="">(全部料號)</option>
+                                    </select>
+                                </div>
+                            </th>
+                            <th>
+                                <div class="header-filter-container">
+                                    <span>Shopee SKU ID / MT-SKU</span>
+                                </div>
+                            </th>
+                            <th class="name-col">
+                                <div class="header-filter-container">
+                                    <span>商品名稱</span>
+                                </div>
+                            </th>
+                            <th class="text-center">
+                                <div class="header-filter-container">
+                                    <span>預計進貨量 (pcs)</span>
+                                </div>
+                            </th>
+                            <th style="color: var(--success); text-align: center; width: 110px;">
+                                <div class="header-filter-container">
+                                    <span>廠商確認數量</span>
+                                </div>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const STORAGE_KEY_SKU = 'SHOPEE_MY_MT_SKU_LIST';
+    const STORAGE_KEY_GSHEET = 'SHOPEE_MY_GSHEET_URL';
+
+    const defaultSKUs = [
+        "11537827356_84501953948", "10325977452_84171172892", "10325977452_84171172893",
+        "10325977452_84171172894", "11325863608_46922624495", "10525977513_101419037396",
+        "10525977513_101419037394", "10525977513_101419037397", "11325863604_385453182537",
+        "11325863604_56922585158", "11325863604_385453182538", "11325863604_56922585157",
+        "11325863606_56922585160", "47355322691_302363802036", "47355322691_302363802037",
+        "47355322691_302363802034", "47355322691_302363802035", "47355322691_315485220429",
+        "12154205464_425597400868", "12154205464_85986492637", "12154205464_425597400867",
+        "12154205464_425597402669", "20020020884_107014000445", "20020020884_415597402664"
+    ];
+
+    let poWorkbook = null;
+    let rawPOJsonData = [];
+    let poHeaders = [];
+    let columnIndices = {};
+    let matchedDataRows = []; 
+    let replenishParsedMap = new Map();
+
+    const STORAGE_KEY_PO_STATE = 'SHOPEE_SAVED_PO_STATE';
+    let lastWhPRMap = { 'TWG': new Set(), 'TWX': new Set(), 'TWA': new Set(), 'OTHER': new Set() };
+    let lastTotalQty = 0;
+
+    window.addEventListener('DOMContentLoaded', () => {
+        const savedSKUs = localStorage.getItem(STORAGE_KEY_SKU);
+        if (savedSKUs !== null) {
+            document.getElementById('skuInput').value = savedSKUs;
+        } else {
+            document.getElementById('skuInput').value = defaultSKUs.join('\n');
+        }
+        updateSKUCount();
+
+        const savedGSheet = localStorage.getItem(STORAGE_KEY_GSHEET);
+        if (savedGSheet !== null) {
+            document.getElementById('gsheetUrlInput').value = savedGSheet;
+        }
+
+        restoreSavedPOState();
+    });
+
+    function saveCurrentPOState() {
+        if (!matchedDataRows || matchedDataRows.length === 0) return;
+        
+        const state = {
+            fileName: document.getElementById('fileNameDisplay').innerText,
+            matchedDataRows: matchedDataRows,
+            whPRMapObj: {
+                TWG: Array.from(lastWhPRMap.TWG || []),
+                TWX: Array.from(lastWhPRMap.TWX || []),
+                TWA: Array.from(lastWhPRMap.TWA || []),
+                OTHER: Array.from(lastWhPRMap.OTHER || [])
+            },
+            rawPOJsonData: rawPOJsonData,
+            poHeaders: poHeaders,
+            columnIndices: columnIndices,
+            totalQty: lastTotalQty
+        };
+
+        try {
+            localStorage.setItem(STORAGE_KEY_PO_STATE, JSON.stringify(state));
+        } catch (e) {
+            console.warn('狀態儲存失敗:', e);
+        }
+    }
+
+    function restoreSavedPOState() {
+        const savedStateStr = localStorage.getItem(STORAGE_KEY_PO_STATE);
+        if (!savedStateStr) return;
+
+        try {
+            const state = JSON.parse(savedStateStr);
+            if (state && state.matchedDataRows && state.matchedDataRows.length > 0) {
+                matchedDataRows = state.matchedDataRows;
+                rawPOJsonData = state.rawPOJsonData || [];
+                poHeaders = state.poHeaders || [];
+                columnIndices = state.columnIndices || {};
+                lastTotalQty = state.totalQty || 0;
+
+                lastWhPRMap = {
+                    TWG: new Set(state.whPRMapObj.TWG || []),
+                    TWX: new Set(state.whPRMapObj.TWX || []),
+                    TWA: new Set(state.whPRMapObj.TWA || []),
+                    OTHER: new Set(state.whPRMapObj.OTHER || [])
+                };
+
+                if (state.fileName) {
+                    document.getElementById('fileNameDisplay').innerText = `已載入上次進度: ${state.fileName}`;
+                }
+
+                renderResults(lastWhPRMap, lastTotalQty);
+                setupFilterDropdowns();
+                showToast(`📌 已自動恢復您上一次處理的採購單進度。如上傳新 Excel，將自動進行覆蓋！`);
+            }
+        } catch (e) {
+            console.error('恢復狀態失敗:', e);
+        }
+    }
+
+    document.getElementById('skuInput').addEventListener('input', () => {
+        const textVal = document.getElementById('skuInput').value;
+        localStorage.setItem(STORAGE_KEY_SKU, textVal);
+        updateSKUCount();
+    });
+
+    document.getElementById('gsheetUrlInput').addEventListener('input', () => {
+        const urlVal = document.getElementById('gsheetUrlInput').value;
+        localStorage.setItem(STORAGE_KEY_GSHEET, urlVal);
+    });
+
+    function updateSKUCount() {
+        const skus = getSKUSet();
+        document.getElementById('skuCountBadge').innerText = `已載入 ${skus.size} 個 SKU`;
+    }
+
+    function getSKUSet() {
+        const text = document.getElementById('skuInput').value;
+        const list = text.split(/[\s,]+/).map(s => s.trim()).filter(s => s.length > 0);
+        return new Set(list);
+    }
+
+    function handleFileSelect(evt) {
+        const file = evt.target.files[0];
+        if (file) {
+            document.getElementById('fileNameDisplay').innerText = `${file.name}`;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                poWorkbook = XLSX.read(data, {type: 'array'});
+            };
+            reader.readAsArrayBuffer(file);
+        }
+    }
+
+    function handleReplenishFileSelect(evt) {
+        const file = evt.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                const rows = XLSX.utils.sheet_to_json(sheet, {header: 1});
+                parseReplenishArray(rows);
+                applyReplenishToDetails();
+            };
+            reader.readAsArrayBuffer(file);
+        }
+    }
+
+    function showToast(msg) {
+        const toast = document.getElementById('alertToast');
+        toast.innerText = msg;
+        toast.style.display = 'block';
+        setTimeout(() => { toast.style.display = 'none'; }, 6000);
+    }
+
+    function processPO() {
+        if (!poWorkbook) {
+            alert('請先上傳每週採購單 Excel 檔案！');
+            return;
+        }
+
+        const mySKUs = getSKUSet();
+        if (mySKUs.size === 0) {
+            alert('請輸入您的 MT-SKU 清單！');
+            return;
+        }
+
+        const firstSheetName = poWorkbook.SheetNames[0];
+        const worksheet = poWorkbook.Sheets[firstSheetName];
+        rawPOJsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1});
+
+        if (rawPOJsonData.length < 2) {
+            alert('採購單內容不足或格式不符！');
+            return;
+        }
+
+        poHeaders = rawPOJsonData[0];
+        columnIndices = {
+            prId: -1, wh: -1, expectedDate: -1, skuId: -1, name: -1, qty: -1, supplierSku: -1, confirmedQty: -1
+        };
+
+        for (let i = 0; i < poHeaders.length; i++) {
+            const h = String(poHeaders[i] || '').trim();
+            if (h === 'PR ID') columnIndices.prId = i;
+            if (h === 'Warehouse') columnIndices.wh = i;
+            if (h === 'Expected Inbound Date') columnIndices.expectedDate = i;
+            if (h === 'Shopee SKU ID') columnIndices.skuId = i;
+            if (h === 'Shopee SKU Name') columnIndices.name = i;
+            if (h === 'Shopee Requested Qty (pcs)') columnIndices.qty = i;
+            if (h === 'Supplier SKU ID') columnIndices.supplierSku = i;
+            if (h === 'Supplier Confirmed Qty (unit)') columnIndices.confirmedQty = i;
+        }
+
+        if (columnIndices.prId === -1 || columnIndices.wh === -1 || columnIndices.skuId === -1) {
+            alert('無法定位 PR ID / Warehouse / Shopee SKU ID 欄位，請確認 Excel 格式。');
+            return;
+        }
+
+        matchedDataRows = [];
+        const whPRMap = { 'TWG': new Set(), 'TWX': new Set(), 'TWA': new Set(), 'OTHER': new Set() };
+        let totalQty = 0;
+
+        for (let r = 1; r < rawPOJsonData.length; r++) {
+            const row = rawPOJsonData[r];
+            if (!row || row.length === 0) continue;
+
+            const skuId = String(row[columnIndices.skuId] || '').trim();
+            const prId = String(row[columnIndices.prId] || '').trim();
+            const wh = String(row[columnIndices.wh] || '').trim().toUpperCase();
+
+            if (mySKUs.has(skuId) && prId && prId !== 'PR ID') {
+                const name = String(row[columnIndices.name] || '');
+                const qty = parseFloat(row[columnIndices.qty] || 0);
+                let vendorCode = columnIndices.supplierSku !== -1 ? String(row[columnIndices.supplierSku] || '').trim() : '';
+                if (!vendorCode) vendorCode = '-';
+
+                let existingConfirmedQty = columnIndices.confirmedQty !== -1 ? row[columnIndices.confirmedQty] : '';
+
+                const item = {
+                    rawRowIdx: r,
+                    wh: wh,
+                    prId: prId,
+                    vendorCode: vendorCode,
+                    skuId: skuId,
+                    name: name,
+                    qty: qty,
+                    confirmedQty: existingConfirmedQty !== undefined ? existingConfirmedQty : ''
+                };
+
+                matchedDataRows.push(item);
+                totalQty += qty;
+
+                if (wh.includes('TWG') || wh.includes('高鐵')) whPRMap['TWG'].add(prId);
+                else if (wh.includes('TWX') || wh.includes('安南')) whPRMap['TWX'].add(prId);
+                else if (wh.includes('TWA') || wh.includes('觀音')) whPRMap['TWA'].add(prId);
+                else whPRMap['OTHER'].add(prId);
+            }
+        }
+
+        lastWhPRMap = whPRMap;
+        lastTotalQty = totalQty;
+
+        renderResults(whPRMap, totalQty);
+        setupFilterDropdowns();
+        saveCurrentPOState();
+        showToast(`✅ 成功比對出 ${matchedDataRows.length} 項您的商品（來自 ${getTotalPRCount(whPRMap)} 張採購單）。已為您儲存進度！`);
+    }
+
+    function getTotalPRCount(whPRMap) {
+        let count = 0;
+        Object.values(whPRMap).forEach(s => count += s.size);
+        return count;
+    }
+
+    function renderResults(whPRMap, totalQty) {
+        document.getElementById('resultSection').style.display = 'block';
+
+        document.getElementById('totalMatchingPR').innerText = getTotalPRCount(whPRMap);
+        document.getElementById('totalMatchingItems').innerText = matchedDataRows.length;
+        document.getElementById('totalMatchingQty').innerText = totalQty.toLocaleString();
+
+        renderWarehouseList('groupTWG', 'listTWG', whPRMap['TWG']);
+        renderWarehouseList('groupTWX', 'listTWX', whPRMap['TWX']);
+        renderWarehouseList('groupTWA', 'listTWA', whPRMap['TWA']);
+        renderWarehouseList('groupOTHER', 'listOTHER', whPRMap['OTHER']);
+
+        renderDetailsTable();
+
+        document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function renderWarehouseList(groupId, listId, prSet) {
+        const groupEl = document.getElementById(groupId);
+        const listEl = document.getElementById(listId);
+
+        if (!prSet || prSet.size === 0) {
+            groupEl.style.display = 'none';
+        } else {
+            groupEl.style.display = 'block';
+            listEl.innerText = Array.from(prSet).join('\n');
+        }
+    }
+
+    function setupFilterDropdowns() {
+        const whSet = new Set();
+        const prSet = new Set();
+        const vendorSet = new Set();
+
+        matchedDataRows.forEach(r => {
+            if (r.wh) whSet.add(r.wh);
+            if (r.prId) prSet.add(r.prId);
+            if (r.vendorCode && r.vendorCode !== '-') vendorSet.add(r.vendorCode);
+        });
+
+        populateSelect('filterWh', whSet, '(全部倉別)');
+        populateSelect('filterPR', prSet, '(全部單號)');
+        populateSelect('filterVendor', vendorSet, '(全部料號)');
+    }
+
+    function populateSelect(id, setObj, defaultText) {
+        const select = document.getElementById(id);
+        select.innerHTML = `<option value="">${defaultText}</option>`;
+        Array.from(setObj).sort().forEach(val => {
+            const opt = document.createElement('option');
+            opt.value = val;
+            opt.innerText = val;
+            select.appendChild(opt);
+        });
+    }
+
+    function applyTableFilters() {
+        const whVal = document.getElementById('filterWh').value;
+        const prVal = document.getElementById('filterPR').value;
+        const vendorVal = document.getElementById('filterVendor').value;
+
+        renderDetailsTable(whVal, prVal, vendorVal);
+    }
+
+    function renderDetailsTable(filterWh = '', filterPR = '', filterVendor = '') {
+        const tbody = document.querySelector('#detailsTable tbody');
+        tbody.innerHTML = '';
+
+        let totalConfirmed = 0;
+
+        matchedDataRows.forEach((row, idx) => {
+            if (filterWh && row.wh !== filterWh) return;
+            if (filterPR && row.prId !== filterPR) return;
+            if (filterVendor && row.vendorCode !== filterVendor) return;
+
+            const tr = document.createElement('tr');
+            
+            let valNum = parseFloat(row.confirmedQty);
+            if (!isNaN(valNum)) totalConfirmed += valNum;
+
+            tr.innerHTML = `
+                <td><strong>${row.wh}</strong></td>
+                <td>${row.prId}</td>
+                <td>${row.vendorCode}</td>
+                <td><code>${row.skuId}</code></td>
+                <td class="name-col">${row.name}</td>
+                <td class="text-center">${row.qty}</td>
+                <td style="text-align: center;">
+                    <input type="number" class="qty-input-box" value="${row.confirmedQty !== undefined ? row.confirmedQty : ''}" 
+                        onchange="updateRowConfirmedQty(${idx}, this.value)" placeholder="未填">
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.getElementById('totalConfirmedQty').innerText = totalConfirmed.toLocaleString();
+    }
+
+    function updateRowConfirmedQty(idx, val) {
+        matchedDataRows[idx].confirmedQty = val;
+        if (columnIndices.confirmedQty !== -1) {
+            rawPOJsonData[matchedDataRows[idx].rawRowIdx][columnIndices.confirmedQty] = val;
+        }
+        
+        let totalConfirmed = 0;
+        matchedDataRows.forEach(r => {
+            let n = parseFloat(r.confirmedQty);
+            if (!isNaN(n)) totalConfirmed += n;
+        });
+        document.getElementById('totalConfirmedQty').innerText = totalConfirmed.toLocaleString();
+        saveCurrentPOState();
+    }
+
+    
+    
+    
+    
+    // 網頁版線上連動核心 V21：專為 https:// 線上網站打造，採用 100% 免 CORS 阻擋的 Google Visualization JSONP 機制
+    function readReplenishFromGSheet() {
+        if (matchedDataRows.length === 0) {
+            alert('請先點擊「比對與抓取採購單」！');
+            return;
+        }
+
+        const url = document.getElementById('gsheetUrlInput').value.trim();
+        
+        // 若使用者在輸入框中直接貼上了表格文字 (如從 Excel/Google Sheets 直接複製貼上)
+        if (url.includes('\n') || url.includes('\t') || (url.includes(',') && !url.startsWith('http'))) {
+            try {
+                const workbook = XLSX.read(url, {type: 'string'});
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const rows = XLSX.utils.sheet_to_json(firstSheet, {header: 1});
+                parseReplenishArray(rows);
+                applyReplenishToDetails();
+                return;
+            } catch (e) {
+                console.warn('貼入文字解析失敗:', e);
+            }
+        }
+
+        if (!url) {
+            alert('請輸入 Google Sheets 網址！');
+            return;
+        }
+
+        let docId = '';
+        let gid = '0';
+
+        // 解析一般的 edit 網址，或是已發佈的 pub 網址
+        const idMatch = url.match(/\/d\/(?:e\/)?([a-zA-Z0-9-_]+)/);
+        if (idMatch) docId = idMatch[1];
+
+        const gidMatch = url.match(/[?&]gid=([0-9]+)/);
+        if (gidMatch) gid = gidMatch[1];
+
+        if (!docId) {
+            alert('無法解析該 Google Sheets 網址，請確認網址格式！');
+            return;
+        }
+
+        showToast('⏳ 正在透過 Google 試算表 API 抓取最新補貨資料...');
+
+        // 採用 JSONP (Dynamic Script Tag) 注入，跨網域 100% 成功，不受瀏覽器 CORS 影響
+        const callbackName = 'gvizCallback_' + Date.now();
+
+        window[callbackName] = function(response) {
+            delete window[callbackName];
+            const scriptEl = document.getElementById(callbackName);
+            if (scriptEl) scriptEl.remove();
+
+            if (!response || !response.table) {
+                alert('Google Sheets 回傳資料格式有誤，請確認該試算表是否已有分享權限！');
+                return;
+            }
+
+            const table = response.table;
+            const rows = [];
+
+            if (table.cols) {
+                rows.push(table.cols.map(c => c ? (c.label || c.id || '') : ''));
+            }
+
+            if (table.rows) {
+                table.rows.forEach(r => {
+                    if (r && r.c) {
+                        rows.push(r.c.map(cell => cell ? (cell.v !== null && cell.v !== undefined ? cell.v : (cell.f || '')) : ''));
+                    }
+                });
+            }
+
+            parseReplenishArray(rows);
+            applyReplenishToDetails();
+        };
+
+        const script = document.createElement('script');
+        script.id = callbackName;
+        script.src = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tq=&tqx=responseHandler:${callbackName}&gid=${gid}`;
+        
+        script.onerror = function() {
+            delete window[callbackName];
+            script.remove();
+            
+            // 提示開啟權限或使用備用上傳
+            alert('連動失敗！\n\n【請檢查試算表權限】：\n請在 Google 試算表中點選「分享」，確定已設定為「知道連結的人皆可查看」！');
+        };
+
+        document.body.appendChild(script);
+    }
+
+
+    function tryGvizJSONP(docId, gid) {
+        return new Promise((resolve, reject) => {
+            const callbackName = 'gvizCallback_' + Date.now();
+
+            window[callbackName] = function(response) {
+                delete window[callbackName];
+                const scriptEl = document.getElementById(callbackName);
+                if (scriptEl) scriptEl.remove();
+
+                if (response && response.table) {
+                    const table = response.table;
+                    const rows = [];
+
+                    if (table.cols) {
+                        rows.push(table.cols.map(c => c ? (c.label || c.id || '') : ''));
+                    }
+                    if (table.rows) {
+                        table.rows.forEach(r => {
+                            if (r && r.c) {
+                                rows.push(r.c.map(cell => cell ? (cell.v !== null && cell.v !== undefined ? cell.v : (cell.f || '')) : ''));
+                            }
+                        });
+                    }
+
+                    parseReplenishArray(rows);
+                    applyReplenishToDetails();
+                    resolve(true);
+                } else {
+                    resolve(false);
+                }
+            };
+
+            const script = document.createElement('script');
+            script.id = callbackName;
+            script.src = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tq=&tqx=responseHandler:${callbackName}&gid=${gid}`;
+            script.onerror = function() {
+                delete window[callbackName];
+                script.remove();
+                resolve(false);
+            };
+            document.body.appendChild(script);
+        });
+    }
+
+
+    // 精準解析補貨總表 (適用 Excel / CSV / Google Sheets)
+    function parseReplenishArray(rows) {
+        if (!rows || rows.length === 0) return;
+
+        let prIdx = -1, skuIdx = -1, vendorIdx = -1, qtyIdx = -1;
+
+        for (let r = 0; r < Math.min(10, rows.length); r++) {
+            const row = rows[r];
+            if (!row) continue;
+            
+            for (let c = 0; c < row.length; c++) {
+                const cell = String(row[c] || '').trim();
+                const cell_lower = cell.toLowerCase();
+
+                // 1. 採購單號
+                if (cell.includes('採購單號') || cell.includes('採購單') || cell_lower.includes('pr id')) {
+                    prIdx = c;
+                }
+
+                // 2. 蝦皮 SKU ID (必須排除「名稱」)
+                if ((cell_lower.includes('shopee sku id') || cell.includes('蝦皮SKU ID') || cell.includes('蝦皮sku id') || cell_lower.includes('sku id') || cell_lower.includes('mt_sku')) && !cell_lower.includes('name') && !cell.includes('名稱')) {
+                    skuIdx = c;
+                } else if (skuIdx === -1 && (cell_lower.includes('shopee sku') || cell.includes('蝦皮SKU') || cell.includes('蝦皮sku')) && !cell_lower.includes('name') && !cell.includes('名稱')) {
+                    skuIdx = c;
+                }
+
+                // 3. 廠商料號 / 供應商料號
+                if (cell.includes('供應商料號') || cell.includes('廠商料號') || cell_lower.includes('supplier sku id') || cell.includes('料號')) {
+                    vendorIdx = c;
+                }
+
+                // 4. 補貨確認數量 (優先「廠商確認數量」，排除「採購數量」)
+                if (cell_lower.includes('supplier confirmed') || cell.includes('廠商確認數量') || cell.includes('確認數量') || cell.includes('補貨量')) {
+                    qtyIdx = c;
+                } else if (qtyIdx === -1 && (cell.includes('數量') || cell_lower.includes('qty')) && !cell.includes('採購數量') && !cell_lower.includes('requested')) {
+                    qtyIdx = c;
+                }
+            }
+
+            if (skuIdx !== -1 && qtyIdx !== -1) break;
+        }
+
+        if (skuIdx === -1 && vendorIdx !== -1) skuIdx = vendorIdx;
+        if (skuIdx === -1) skuIdx = 0;
+        if (qtyIdx === -1) qtyIdx = rows[0].length - 1;
+
+        replenishParsedMap.clear();
+
+        for (let r = 0; r < rows.length; r++) {
+            const row = rows[r];
+            if (!row || row.length === 0) continue;
+
+            const sku = skuIdx !== -1 && skuIdx < row.length ? String(row[skuIdx] || '').trim() : '';
+            const vendor = vendorIdx !== -1 && vendorIdx < row.length ? String(row[vendorIdx] || '').trim() : '';
+            const pr = prIdx !== -1 && prIdx < row.length ? String(row[prIdx] || '').trim() : '';
+            const qty = qtyIdx !== -1 && qtyIdx < row.length && row[qtyIdx] !== undefined ? String(row[qtyIdx]).trim() : '';
+
+            if (qty !== undefined && qty !== null && qty !== '') {
+                if (pr && sku) replenishParsedMap.set(pr + '_' + sku, qty);
+                if (pr && vendor) replenishParsedMap.set(pr + '_' + vendor, qty);
+                if (sku && sku !== '蝦皮SKU ID' && sku !== 'Shopee SKU ID') replenishParsedMap.set(sku, qty);
+                if (vendor && vendor !== '供應商料號' && vendor !== 'Supplier SKU ID') replenishParsedMap.set(vendor, qty);
+            }
+        }
+    }
+
+    function applyReplenishToDetails() {
+        if (replenishParsedMap.size === 0) {
+            alert('未讀取到有效的補貨數量資料！請確認檔案欄位是否包含「蝦皮SKU ID」與「廠商確認數量」。');
+            return;
+        }
+
+        let updatedCount = 0;
+
+        matchedDataRows.forEach((row, idx) => {
+            const key1 = row.prId + '_' + row.skuId;
+            const key2 = row.prId + '_' + row.vendorCode;
+            const key3 = row.skuId;
+            const key4 = row.vendorCode;
+
+            let fillVal = undefined;
+            if (replenishParsedMap.has(key1)) {
+                fillVal = replenishParsedMap.get(key1);
+            } else if (replenishParsedMap.has(key2)) {
+                fillVal = replenishParsedMap.get(key2);
+            } else if (replenishParsedMap.has(key3)) {
+                fillVal = replenishParsedMap.get(key3);
+            } else if (replenishParsedMap.has(key4)) {
+                fillVal = replenishParsedMap.get(key4);
+            }
+
+            if (fillVal !== undefined && fillVal !== null && fillVal !== '') {
+                row.confirmedQty = fillVal;
+                if (columnIndices.confirmedQty !== -1) {
+                    rawPOJsonData[row.rawRowIdx][columnIndices.confirmedQty] = fillVal;
+                }
+                updatedCount++;
+            }
+        });
+
+        applyTableFilters();
+        saveCurrentPOState();
+        showToast(`🎉 成功自動回填 ${updatedCount} 筆商品之 Supplier Confirmed Qty 補貨數量！`);
+    }
+
+    // 關鍵修正：直接修改原始上傳的 poWorkbook 工作表，100% 保留蝦皮原廠格式與欄位屬性！
+    
+    // 關鍵修正 V15：完全保留 Row 2 (第 2 列標題說明列)，且填入數量時維持蝦皮原廠的「文字型態 (t: 's')」
+    
+    // 關鍵修正 V16：解決跨頁面/恢復記憶時 poWorkbook 變數為 null 導致無法匯出的問題！
+    
+    // 關鍵修正 V22：強制所有儲存格之 number_format 為 '@' (文字格式)，使 Excel 頂部格式列 100% 顯示「文字」
+    
+    // 關鍵修正 V23：
+    // 1. 於 Step 3 區域加入日期選擇器，自動回填 D 欄 (Expected Inbound Date)
+    // 2. 整份 Excel 100% 強制所有欄位儲存格型態皆為純文字 (`t: 's'`, `z: '@'`)，使 Excel 點擊任何儲存格頂部格式皆顯示「文字」！
+    
+    // 關鍵修正 V24：
+    // 1. 無條件精準覆蓋 D 欄位 (索引 3，即 第 4 欄 Expected Inbound Date)
+    // 2. 整份 Excel 100% 強制所有欄位儲存格型態皆為純文字 (`t: 's'`, `z: '@'`)
+    function exportFilteredExcel() {
+        if (!matchedDataRows || matchedDataRows.length === 0) {
+            alert('沒有可匯出的採購單資料！請先上傳採購單並完成比對。');
+            return;
+        }
+
+        if (columnIndices.confirmedQty === -1) {
+            alert('找不到 Supplier Confirmed Qty (unit) 欄位！');
+            return;
+        }
+
+        let worksheet = null;
+        let firstSheetName = "Sheet1";
+
+        if (poWorkbook && poWorkbook.SheetNames && poWorkbook.SheetNames.length > 0) {
+            firstSheetName = poWorkbook.SheetNames[0];
+            worksheet = poWorkbook.Sheets[firstSheetName];
+        } else {
+            worksheet = XLSX.utils.aoa_to_sheet(rawPOJsonData);
+        }
+
+        const keepRowIndices = new Set();
+        keepRowIndices.add(0); // 第1列：表頭
+        keepRowIndices.add(1); // 第2列：蝦皮說明列
+
+        // 取得使用者選擇的預計進貨日期 (YYYY-MM-DD)
+        const selectedDate = document.getElementById('expectedInboundDateInput').value;
+
+        const qtyColLetter = XLSX.utils.encode_col(columnIndices.confirmedQty); // I 欄位字母
+        const dateColLetter = 'D'; // 強制精準指定為 D 欄 (即 Expected Inbound Date 欄位)
+
+        matchedDataRows.forEach(item => {
+            keepRowIndices.add(item.rawRowIdx);
+
+            const rowNumber = item.rawRowIdx + 1; // Excel 列號 (從 1 開始)
+
+            // 1. 寫回 I 欄 Supplier Confirmed Qty (unit) 數量
+            const qtyCellRef = qtyColLetter + rowNumber;
+            if (item.confirmedQty !== '' && item.confirmedQty !== undefined && item.confirmedQty !== null) {
+                worksheet[qtyCellRef] = { t: 's', v: String(item.confirmedQty), z: '@' };
+            } else {
+                delete worksheet[qtyCellRef];
+            }
+
+            // 2. 寫回 D 欄 Expected Inbound Date 日期 (若使用者有選取日期，直接覆蓋原生日期)
+            if (selectedDate) {
+                const dateCellRef = dateColLetter + rowNumber;
+                worksheet[dateCellRef] = { t: 's', v: String(selectedDate), z: '@' };
+            }
+        });
+
+        const range = XLSX.utils.decode_range(worksheet['!ref']);
+        const newWorksheet = {};
+
+        if (worksheet['!cols']) newWorksheet['!cols'] = worksheet['!cols'];
+        if (worksheet['!rows']) newWorksheet['!rows'] = worksheet['!rows'];
+        if (worksheet['!merges']) newWorksheet['!merges'] = worksheet['!merges'];
+
+        let newRowIdx = 0;
+
+        for (let R = range.s.r; R <= range.e.r; ++R) {
+            if (keepRowIndices.has(R)) {
+                for (let C = range.s.c; C <= range.e.c; ++C) {
+                    const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+                    if (worksheet[cellAddress]) {
+                        const newCellAddress = XLSX.utils.encode_cell({ r: newRowIdx, c: C });
+                        
+                        const rawCell = worksheet[cellAddress];
+                        let cellValue = (rawCell.v !== undefined && rawCell.v !== null) ? String(rawCell.v) : '';
+
+                        // 如果這是一般資料列 (R >= 2) 且為 D 欄 (C === 3)，且使用者有選擇新日期，強制使用新日期
+                        if (selectedDate && R >= 2 && C === 3) {
+                            cellValue = String(selectedDate);
+                        }
+
+                        // 整份 Excel 100% 強制所有儲存格型態均為文字
+                        newWorksheet[newCellAddress] = {
+                            t: 's',
+                            v: cellValue,
+                            z: '@'
+                        };
+                    }
+                }
+                newRowIdx++;
+            }
+        }
+
+        newWorksheet['!ref'] = XLSX.utils.encode_range({
+            s: { r: 0, c: range.s.c },
+            e: { r: newRowIdx - 1, c: range.e.c }
+        });
+
+        const newWb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(newWb, newWorksheet, firstSheetName);
+
+        const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const filename = `My_Brand_Shopee_PO_Confirmed_${today}.xlsx`;
+
+        XLSX.writeFile(newWb, filename, { cellStyles: true });
+        
+        let msg = `📥 匯出成功！整份 Excel 格式已 100% 設定為純文字 (@)；`;
+        if (selectedDate) {
+            msg += `已將 D 欄原生日期強制覆蓋為 ${selectedDate}！`;
+        } else {
+            msg += `(D 欄位維持原狀)`;
+        }
+        showToast(msg);
+    }
+
+
+    function copyText(elementId) {
+        const text = document.getElementById(elementId).innerText;
+        navigator.clipboard.writeText(text).then(() => {
+            alert('已成功複製單號至剪貼簿！');
+        }).catch(err => {
+            alert('複製失敗，請手動複製。');
+        });
+    }
+</script>
+
+</body>
+</html>
