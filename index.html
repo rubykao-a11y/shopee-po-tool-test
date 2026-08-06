@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>蝦皮採購單自動篩選與補貨自動回填工具</title>
+    <title>蝦皮採購單自動篩選與補貨自動回填工具 (TEST版)</title>
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
     <style>
         :root {
@@ -401,7 +401,7 @@
                 </div>
                 <div class="gsheet-box">
                     <input type="text" id="gsheetUrlInput" 
-                        value="https://docs.google.com/spreadsheets/d/1BYns8Hpz3sNp-7uyHE4qSFRiELWAjoCOyjonqnJrzOE/edit?gid=1040995428#gid=1040995428&range=A:L" 
+                        value="" 
                         placeholder="請貼入 Google Sheets 網址...">
                 </div>
                 <div style="margin-top: 6px; margin-bottom: 8px;">
@@ -557,19 +557,10 @@
 </div>
 
 <script>
-    const STORAGE_KEY_SKU = 'SHOPEE_MY_MT_SKU_LIST';
-    const STORAGE_KEY_GSHEET = 'SHOPEE_MY_GSHEET_URL';
-
-    const defaultSKUs = [
-        "11537827356_84501953948", "10325977452_84171172892", "10325977452_84171172893",
-        "10325977452_84171172894", "11325863608_46922624495", "10525977513_101419037396",
-        "10525977513_101419037394", "10525977513_101419037397", "11325863604_385453182537",
-        "11325863604_56922585158", "11325863604_385453182538", "11325863604_56922585157",
-        "11325863606_56922585160", "47355322691_302363802036", "47355322691_302363802037",
-        "47355322691_302363802034", "47355322691_302363802035", "47355322691_315485220429",
-        "12154205464_425597400868", "12154205464_85986492637", "12154205464_425597400867",
-        "12154205464_425597402669", "20020020884_107014000445", "20020020884_415597402664"
-    ];
+    // TEST 專屬獨立快取金鑰名稱 (完全隔離不衝突)
+    const STORAGE_KEY_SKU = 'SHOPEE_MY_MT_SKU_LIST_TEST';
+    const STORAGE_KEY_GSHEET = 'SHOPEE_MY_GSHEET_URL_TEST';
+    const STORAGE_KEY_PO_STATE = 'SHOPEE_SAVED_PO_STATE_TEST';
 
     let poWorkbook = null;
     let rawPOJsonData = [];
@@ -578,7 +569,6 @@
     let matchedDataRows = []; 
     let replenishParsedMap = new Map();
 
-    const STORAGE_KEY_PO_STATE = 'SHOPEE_SAVED_PO_STATE';
     let lastWhPRMap = { 'TWG': new Set(), 'TWX': new Set(), 'TWA': new Set(), 'OTHER': new Set() };
     let lastTotalQty = 0;
 
@@ -586,8 +576,6 @@
         const savedSKUs = localStorage.getItem(STORAGE_KEY_SKU);
         if (savedSKUs !== null) {
             document.getElementById('skuInput').value = savedSKUs;
-        } else {
-            document.getElementById('skuInput').value = defaultSKUs.join('\n');
         }
         updateSKUCount();
 
@@ -927,11 +915,6 @@
         saveCurrentPOState();
     }
 
-    
-    
-    
-    
-    // 網頁版線上連動核心 V21：專為 https:// 線上網站打造，採用 100% 免 CORS 阻擋的 Google Visualization JSONP 機制
     function readReplenishFromGSheet() {
         if (matchedDataRows.length === 0) {
             alert('請先點擊「比對與抓取採購單」！');
@@ -940,7 +923,6 @@
 
         const url = document.getElementById('gsheetUrlInput').value.trim();
         
-        // 若使用者在輸入框中直接貼上了表格文字 (如從 Excel/Google Sheets 直接複製貼上)
         if (url.includes('\n') || url.includes('\t') || (url.includes(',') && !url.startsWith('http'))) {
             try {
                 const workbook = XLSX.read(url, {type: 'string'});
@@ -962,7 +944,6 @@
         let docId = '';
         let gid = '0';
 
-        // 解析一般的 edit 網址，或是已發佈的 pub 網址
         const idMatch = url.match(/\/d\/(?:e\/)?([a-zA-Z0-9-_]+)/);
         if (idMatch) docId = idMatch[1];
 
@@ -976,7 +957,6 @@
 
         showToast('⏳ 正在透過 Google 試算表 API 抓取最新補貨資料...');
 
-        // 採用 JSONP (Dynamic Script Tag) 注入，跨網域 100% 成功，不受瀏覽器 CORS 影響
         const callbackName = 'gvizCallback_' + Date.now();
 
         window[callbackName] = function(response) {
@@ -1015,61 +995,12 @@
         script.onerror = function() {
             delete window[callbackName];
             script.remove();
-            
-            // 提示開啟權限或使用備用上傳
             alert('連動失敗！\n\n【請檢查試算表權限】：\n請在 Google 試算表中點選「分享」，確定已設定為「知道連結的人皆可查看」！');
         };
 
         document.body.appendChild(script);
     }
 
-
-    function tryGvizJSONP(docId, gid) {
-        return new Promise((resolve, reject) => {
-            const callbackName = 'gvizCallback_' + Date.now();
-
-            window[callbackName] = function(response) {
-                delete window[callbackName];
-                const scriptEl = document.getElementById(callbackName);
-                if (scriptEl) scriptEl.remove();
-
-                if (response && response.table) {
-                    const table = response.table;
-                    const rows = [];
-
-                    if (table.cols) {
-                        rows.push(table.cols.map(c => c ? (c.label || c.id || '') : ''));
-                    }
-                    if (table.rows) {
-                        table.rows.forEach(r => {
-                            if (r && r.c) {
-                                rows.push(r.c.map(cell => cell ? (cell.v !== null && cell.v !== undefined ? cell.v : (cell.f || '')) : ''));
-                            }
-                        });
-                    }
-
-                    parseReplenishArray(rows);
-                    applyReplenishToDetails();
-                    resolve(true);
-                } else {
-                    resolve(false);
-                }
-            };
-
-            const script = document.createElement('script');
-            script.id = callbackName;
-            script.src = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tq=&tqx=responseHandler:${callbackName}&gid=${gid}`;
-            script.onerror = function() {
-                delete window[callbackName];
-                script.remove();
-                resolve(false);
-            };
-            document.body.appendChild(script);
-        });
-    }
-
-
-    // 精準解析補貨總表 (適用 Excel / CSV / Google Sheets)
     function parseReplenishArray(rows) {
         if (!rows || rows.length === 0) return;
 
@@ -1083,24 +1014,20 @@
                 const cell = String(row[c] || '').trim();
                 const cell_lower = cell.toLowerCase();
 
-                // 1. 採購單號
                 if (cell.includes('採購單號') || cell.includes('採購單') || cell_lower.includes('pr id')) {
                     prIdx = c;
                 }
 
-                // 2. 蝦皮 SKU ID (必須排除「名稱」)
                 if ((cell_lower.includes('shopee sku id') || cell.includes('蝦皮SKU ID') || cell.includes('蝦皮sku id') || cell_lower.includes('sku id') || cell_lower.includes('mt_sku')) && !cell_lower.includes('name') && !cell.includes('名稱')) {
                     skuIdx = c;
                 } else if (skuIdx === -1 && (cell_lower.includes('shopee sku') || cell.includes('蝦皮SKU') || cell.includes('蝦皮sku')) && !cell_lower.includes('name') && !cell.includes('名稱')) {
                     skuIdx = c;
                 }
 
-                // 3. 廠商料號 / 供應商料號
                 if (cell.includes('供應商料號') || cell.includes('廠商料號') || cell_lower.includes('supplier sku id') || cell.includes('料號')) {
                     vendorIdx = c;
                 }
 
-                // 4. 補貨確認數量 (優先「廠商確認數量」，排除「採購數量」)
                 if (cell_lower.includes('supplier confirmed') || cell.includes('廠商確認數量') || cell.includes('確認數量') || cell.includes('補貨量')) {
                     qtyIdx = c;
                 } else if (qtyIdx === -1 && (cell.includes('數量') || cell_lower.includes('qty')) && !cell.includes('採購數量') && !cell_lower.includes('requested')) {
@@ -1174,21 +1101,6 @@
         showToast(`🎉 成功自動回填 ${updatedCount} 筆商品之 Supplier Confirmed Qty 補貨數量！`);
     }
 
-    // 關鍵修正：直接修改原始上傳的 poWorkbook 工作表，100% 保留蝦皮原廠格式與欄位屬性！
-    
-    // 關鍵修正 V15：完全保留 Row 2 (第 2 列標題說明列)，且填入數量時維持蝦皮原廠的「文字型態 (t: 's')」
-    
-    // 關鍵修正 V16：解決跨頁面/恢復記憶時 poWorkbook 變數為 null 導致無法匯出的問題！
-    
-    // 關鍵修正 V22：強制所有儲存格之 number_format 為 '@' (文字格式)，使 Excel 頂部格式列 100% 顯示「文字」
-    
-    // 關鍵修正 V23：
-    // 1. 於 Step 3 區域加入日期選擇器，自動回填 D 欄 (Expected Inbound Date)
-    // 2. 整份 Excel 100% 強制所有欄位儲存格型態皆為純文字 (`t: 's'`, `z: '@'`)，使 Excel 點擊任何儲存格頂部格式皆顯示「文字」！
-    
-    // 關鍵修正 V24：
-    // 1. 無條件精準覆蓋 D 欄位 (索引 3，即 第 4 欄 Expected Inbound Date)
-    // 2. 整份 Excel 100% 強制所有欄位儲存格型態皆為純文字 (`t: 's'`, `z: '@'`)
     function exportFilteredExcel() {
         if (!matchedDataRows || matchedDataRows.length === 0) {
             alert('沒有可匯出的採購單資料！請先上傳採購單並完成比對。');
@@ -1214,18 +1126,16 @@
         keepRowIndices.add(0); // 第1列：表頭
         keepRowIndices.add(1); // 第2列：蝦皮說明列
 
-        // 取得使用者選擇的預計進貨日期 (YYYY-MM-DD)
         const selectedDate = document.getElementById('expectedInboundDateInput').value;
 
         const qtyColLetter = XLSX.utils.encode_col(columnIndices.confirmedQty); // I 欄位字母
-        const dateColLetter = 'D'; // 強制精準指定為 D 欄 (即 Expected Inbound Date 欄位)
+        const dateColLetter = 'D'; // 強制精準指定為 D 欄
 
         matchedDataRows.forEach(item => {
             keepRowIndices.add(item.rawRowIdx);
 
-            const rowNumber = item.rawRowIdx + 1; // Excel 列號 (從 1 開始)
+            const rowNumber = item.rawRowIdx + 1;
 
-            // 1. 寫回 I 欄 Supplier Confirmed Qty (unit) 數量
             const qtyCellRef = qtyColLetter + rowNumber;
             if (item.confirmedQty !== '' && item.confirmedQty !== undefined && item.confirmedQty !== null) {
                 worksheet[qtyCellRef] = { t: 's', v: String(item.confirmedQty), z: '@' };
@@ -1233,7 +1143,6 @@
                 delete worksheet[qtyCellRef];
             }
 
-            // 2. 寫回 D 欄 Expected Inbound Date 日期 (若使用者有選取日期，直接覆蓋原生日期)
             if (selectedDate) {
                 const dateCellRef = dateColLetter + rowNumber;
                 worksheet[dateCellRef] = { t: 's', v: String(selectedDate), z: '@' };
@@ -1259,12 +1168,10 @@
                         const rawCell = worksheet[cellAddress];
                         let cellValue = (rawCell.v !== undefined && rawCell.v !== null) ? String(rawCell.v) : '';
 
-                        // 如果這是一般資料列 (R >= 2) 且為 D 欄 (C === 3)，且使用者有選擇新日期，強制使用新日期
                         if (selectedDate && R >= 2 && C === 3) {
                             cellValue = String(selectedDate);
                         }
 
-                        // 整份 Excel 100% 強制所有儲存格型態均為文字
                         newWorksheet[newCellAddress] = {
                             t: 's',
                             v: cellValue,
@@ -1297,7 +1204,6 @@
         }
         showToast(msg);
     }
-
 
     function copyText(elementId) {
         const text = document.getElementById(elementId).innerText;
